@@ -1,76 +1,92 @@
-import db from "@/lib/db";
+// src/lib/repo.js
+import { supabase } from "./supabase"; // ensure relative path correct ho
 
-
-// function to insert a new todo into the database
+// ✅ Insert a new todo
 export async function addTodo(task) {
-  try {
-    const [result] = await db.query(
-      "INSERT INTO todos (task, completed) VALUES (?, ?)",
-      [task, false]
-    );
-    return { id: result.insertId, task, completed: false };
-  } catch (error) {
-    console.error("❌ Error adding todo to DB:", error);
+  const { data, error } = await supabase
+    .from("todos")
+    .insert([{ task, completed: false }])
+    .select()
+    .single();
+
+  if (error) {
+    console.error("❌ Error adding todo:", error);
     throw error;
   }
+
+  return data;
 }
 
-export async function updateTodoStatus(id, completed){
-   try{
-      await db.query("UPDATE todos SET completed = ? WHERE id = ?", [completed ? 1:0 , id]);
-      return {id , completed};
-   }catch(error){
-      console.error("❌ Error updating todo status:", error);
-      throw error;
-   }
-}
- export async function getTodos(req) {
-  try{
-    const [rows] = await db.query("SELECT * FROM todos") ;
-    return rows;
-  }
-  catch (error){
-    console.log("❌ Error getting todos from DB:", error);
-    throw error;
-  }
- }
+// ✅ Update todo completion
+export async function updateTodoStatus(id, completed) {
+  const { data, error } = await supabase
+    .from("todos")
+    .update({ completed })
+    .eq("id", id)
+    .select()
+    .single();
 
- export async function deleteTodo(id) {
-  try{
-    await db.query("DELETE FROM todos WHERE id = ?", [id]);
-    return id;
-  }
-  catch(error){
-    console.error("❌ Error deleting todo from DB:", error);
+  if (error) {
+    console.error("❌ Error updating todo status:", error);
     throw error;
   }
- }
- export async function editTodos(id,task) {
-  try{
-    await db.query("UPDATE todos SET task = ? WHERE id = ?", [task, id]);
-    return {id, task};
-  } catch(error){
-    console.error("❌ Error editing todo from DB:", error);
+
+  return data;
+}
+
+// ✅ Get all todos
+export async function getTodos() {
+  const { data, error } = await supabase.from("todos").select("*");
+  if (error) {
+    console.error("❌ Error fetching todos:", error);
     throw error;
-    
   }
- }
- export async function markAllCompleted() {
-  try {
-    await db.query("UPDATE todos SET completed = 1");
-    return { success: true };
-  } catch (error) {
+  return data;
+}
+
+// ✅ Delete a todo
+export async function deleteTodo(id) {
+  const { data, error } = await supabase.from("todos").delete().eq("id", id).select().single();
+  if (error) {
+    console.error("❌ Error deleting todo:", error);
+    throw error;
+  }
+  return data;
+}
+
+// ✅ Edit task text
+export async function editTodos(id, task) {
+  const { data, error } = await supabase
+    .from("todos")
+    .update({ task })
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("❌ Error editing todo:", error);
+    throw error;
+  }
+
+  return data;
+}
+
+// ✅ Mark all todos completed
+export async function markAllCompleted() {
+  const { data, error } = await supabase.from("todos").update({ completed: true });
+  if (error) {
     console.error("❌ Error marking all completed:", error);
     throw error;
   }
+  return data;
 }
+
+// ✅ Mark all todos uncompleted
 export async function markAllUntick() {
-  try{
-    await db.query("UPDATE todos SET completed = 0");
-    return { success: true };
-  }catch(error){
+  const { data, error } = await supabase.from("todos").update({ completed: false });
+  if (error) {
     console.error("❌ Error marking all uncompleted:", error);
     throw error;
   }
+  return data;
 }
-
