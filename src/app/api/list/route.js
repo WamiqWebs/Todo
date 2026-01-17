@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
+
 export async function GET() {
   try {
     const { data, error } = await supabase.from("todos").select("*").order("id");
@@ -82,4 +83,8 @@ export async function DELETE(req) {
     console.error("❌ Error deleting todo:", err);
     return NextResponse.json({ message: "Server error" }, { status: 500 });
   }
+}
+export async function deleteAllTodos() {
+  await supabase.from("todos").delete().neq("id", 0);
+  return NextResponse.json({ ok: true });
 }

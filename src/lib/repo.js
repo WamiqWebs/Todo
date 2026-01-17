@@ -90,3 +90,9 @@ export async function markAllUntick() {
   }
   return data;
 }
+
+
+export async function deleteAllTodos() {
+  return supabase.from("todos").delete().neq("id", 0);
+}
+

@@ -1,6 +1,7 @@
 "use client"
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase" // Supabase client import
+import toast from "react-hot-toast";
 
 export default function TodoUiCont() {
   const [task, setTask] = useState("");
@@ -8,6 +9,7 @@ export default function TodoUiCont() {
   const [editingId, setEditingId] = useState(null);
   const [editingText, setEditingText] = useState("");
   const [deletedTodo, setDeletedTodo] = useState(null);
+  const [deletedAllTodo,setDeletedAllTodo] = useState(null);
   const [undoTimer, setUndoTimer] = useState(null);
   const [theme, setTheme] = useState("light");
 
@@ -18,31 +20,40 @@ export default function TodoUiCont() {
         const { data, error } = await supabase.from("todos").select("*").order("id");
         if (error) throw error;
 
-        // ✅ Supabase completed is already boolean, just set
+        // ✅ Supabase completed is already boolean
         setTodos(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Error fetching todos:", err);
       }
     }
     fetchTodos();
-  }, [task, editingText]);
+  }, []);
 
   // -------------------- Add todo --------------------
   async function handleAdd() {
-    if (task.trim() === "") {
-      alert("Input is blank, please fill it first");
-      return;
-    }
-    try {
-      const { data, error } = await supabase.from("todos").insert([{ task, completed: false }]).select();
-      if (error) throw error;
-
-      setTodos([...todos, data[0]]);
-      setTask("");
-    } catch (err) {
-      console.error("Error adding todo:", err);
-    }
+  if (task.trim() === "") {
+    alert("Input is blank, please fill it first");
+    return;
   }
+
+  try {
+    const { data, error } = await supabase
+      .from("todos")
+      .insert([{ task, completed: false }])
+      .select();
+
+    if (error) throw error;
+
+    setTodos([...todos, data[0]]);
+    setTask("");
+    toast.success("Task added successfully");
+  } catch (err) {
+    console.error("Error adding todo:", err);
+    toast.error("Failed to add task");
+  }
+} // ✅ THIS WAS MISSING
+
+  
 
   // -------------------- Checkbox toggle --------------------
   async function handleCheckboxChange(id, completed) {
@@ -118,26 +129,81 @@ export default function TodoUiCont() {
   }
 
   // -------------------- Mark / Unmark all --------------------
+  // -------------------- Mark all completed --------------------
   async function handleMarkAllCompleted() {
     try {
-      const { error } = await supabase.from("todos").update({ completed: true });
+      const { data, error } = await supabase
+        .from("todos")
+        .update({ completed: true })
+        .neq("completed", true) // 🔥 REQUIRED filter
+        .select();
+
       if (error) throw error;
 
-      setTodos(prev => prev.map(todo => ({ ...todo, completed: true })));
+      setTodos(prev =>
+        prev.map(todo => ({ ...todo, completed: true }))
+      );
+
+      toast.success("All tasks marked completed!");
     } catch (err) {
-      console.error("Error marking all completed:", err);
+      console.error(err);
+      toast.error("Failed to mark all completed");
     }
   }
+
+  // -------------------- Unmark all --------------------
   async function handleMarkAllUntick() {
     try {
-      const { error } = await supabase.from("todos").update({ completed: false });
+      const { data, error } = await supabase
+        .from("todos")
+        .update({ completed: false })
+        .neq("completed", false) 
+        .select();
+
       if (error) throw error;
 
-      setTodos(prev => prev.map(todo => ({ ...todo, completed: false })));
+      setTodos(prev =>
+        prev.map(todo => ({ ...todo, completed: false }))
+      );
+
+      toast.success("All tasks unselected!");
     } catch (err) {
-      console.error("Error unmarking all:", err);
+      console.error(err);
+      toast.error("Failed to unselect all");
     }
   }
+async function handleDeleteAll() {
+    if (todos.length === 0) return;
+
+  // 🔒 backup
+  setDeletedAllTodo(todos);
+
+ 
+  setTodos([]);
+   const timer = setTimeout(async () => {
+    try {
+      const { error } = await supabase
+        .from("todos")
+        .delete()
+        .neq("id", 0); // delete all
+
+      if (error) throw error;
+      setDeletedAllTodo(null);
+    } catch (err) {
+      console.error(err);
+    }
+  }, 5000);
+
+  setUndoTimer(timer);
+}
+function handleUndoDeleteAll() {
+  if (!deletedAllTodo) return;
+
+  clearTimeout(undoTimer);
+  setTodos(deletedAllTodo);
+  setDeletedAllTodo(null);
+}
+
 
   // -------------------- Theme toggle --------------------
   useEffect(() => {
@@ -154,8 +220,8 @@ export default function TodoUiCont() {
 
   // -------------------- UI --------------------
   return (
-    <section className="flex flex-col">
-      <div className={`flex justify-center items-center flex-wrap gap-y-2 py-5 px-2 gap-x-5 bg-cyan-700 dark:bg-gray-900 ${theme === "light" ? "bg-gray-200" : "bg-gray-800"}`}>
+    <section className="flex flex-col w-screen ml-[calc(50%-50vw)]">
+      <div className={`sticky top-0 z-50 flex justify-center items-center flex-wrap gap-y-2 py-5 gap-x-5 bg-cyan-700 dark:bg-gray-900 ${theme === "light" ? "bg-gray-200" : "bg-gray-800"}`}>
         <button
           className={`px-3 py-1 rounded-md border text-sm font-medium ${theme === "light" ? "bg-gray-200 text-gray-700 hover:bg-gray-500  hover:text-gray-200 " : "bg-gray-700 text-white hover:bg-pink-500"}`}
           onClick={toggleTheme}
@@ -175,18 +241,20 @@ export default function TodoUiCont() {
         </button>
       </div>
 
-      <div className={`flex justify-center items-center px-2 py-5 gap-2 flex-wrap ${theme === "light" ? "bg-gray-400" : "bg-cyan-300"}`}>
+      <div className={`flex justify-center items-center py-5 gap-2 flex-wrap ${theme === "light" ? "bg-gray-400" : "bg-cyan-300"}`}>
         <ul>
+          <div className="py-5">
           <div className="flex justify-center items-center gap-x-2">
-            <button onClick={handleMarkAllCompleted} className={`py-2 px-3 rounded-md text-white ${theme === "light" ? "bg-gray-400 hover:bg-gray-500" : "bg-cyan-300 hover:bg-cyan-400"}`}>Select All</button>
-            <button onClick={handleMarkAllUntick} className={`py-2 px-3 rounded-md text-white ${theme === "light" ? "bg-gray-400 hover:bg-gray-500" : "bg-cyan-300 hover:bg-cyan-400"}`}>Unselect All</button>
+            <button onClick={handleMarkAllCompleted} className={`py-2 px-3 rounded-md text-white ${theme === "light" ? "bg-gray-400 hover:bg-gray-500 shadow shadow-gray-200" : "bg-cyan-300 hover:bg-cyan-400 shadow shadow-cyan-500 "}`}>Select All</button>
+            <button onClick={handleMarkAllUntick} className={`py-2 px-3 rounded-md text-white ${theme === "light" ? "bg-gray-400 hover:bg-gray-500 shadow shadow-gray-200" : "bg-cyan-300 hover:bg-cyan-400 shadow shadow-cyan-500 "}`}>Unselect All</button>
           </div>
 
           {todos.map((todo, index) => (
-            <label key={index} className={`flex flex-wrap items-start justify-between gap-3 px-5 mt-2 py-2 rounded-md ${theme === "light" ? "bg-gray-500" : "bg-cyan-500"}`}>
+            <div className="pl-5">
+            <label key={todo.id} className={`flex flex-wrap items-start justify-between gap-3  px-5 mt-4 py-2 rounded-md ${theme === "light" ? "bg-gray-500" : "bg-cyan-500"}`}>
               {editingId === todo.id ? (
                 <>
-                  <input type="text" value={editingText} onChange={(e) => setEditingText(e.target.value)} className="rounded px-2 flex-1 text-white"/>
+                  <input type="text" value={editingText} onChange={(e) => setEditingText(e.target.value)} className="rounded px-2 flex-1 text-white" />
                   <div className="flex gap-2">
                     <button className="bg-green-500 px-2 text-white rounded" onClick={() => handleUpdate(todo.id)}>✅ Save</button>
                     <button className="bg-gray-500 px-2 text-white rounded" onClick={cancelEditing}>❌ Cancel</button>
@@ -198,33 +266,52 @@ export default function TodoUiCont() {
                     <span className="text-white">{index + 1}. {todo.task}</span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <input type="checkbox" checked={todo.completed} onChange={(e) => handleCheckboxChange(todo.id, e.target.checked)}/>
+                    <input type="checkbox" checked={todo.completed} onChange={(e) => handleCheckboxChange(todo.id, e.target.checked)} />
                     <button type="button" className="p-1 bg-gray-200 hover:bg-gray-400 text-white rounded-md" onClick={() => startEditing(todo)}>✏️</button>
                     <button type="button" className="p-1 bg-gray-200 hover:bg-gray-400 text-white rounded-md" onClick={() => handleDelete(todo.id)}>🗑️</button>
                   </div>
                 </>
               )}
             </label>
+            </div>
           ))}
+          </div>
         </ul>
 
-        {deletedTodo && (
+     
+        <div className="flex flex-col">
+          <button className={`${theme === "dark" ? "bg-cyan-500 hover:bg-pink-500" : "bg-gray-500 hover:bg-gray-600"}  mb-3 rounded px-3 py-2 text-white`}
+            onClick={handleDeleteAll}
+          >Delete All</button>
+          <div className="bg-gray-800 rounded min-h-20 flex flex-col justify-center items-center">
+            <div className="w-[90%] mx-auto mt-4 bg-gray-300 dark:bg-gray-700 rounded-full h-4 overflow-hidden">
+              <div className={`${theme === "dark" ? "bg-pink-500" : "bg-gray-600"} h-4 transition-[width] duration-700 ease-in-out`}
+                style={{ width: `${todos.length === 0 ? 0 : (todos.filter(t => t.completed).length / todos.length) * 100}%` }}
+              ></div>
+            </div>
+         
+            <p className="text-center mt-2 font-medium text-white h-6 w-32 mx-auto">
+              {todos.length === 0
+                ? "No tasks yet"
+                : `${Math.round((todos.filter(t => t.completed).length / todos.length) * 100)}% completed`}
+            </p>
+
+          </div>
+              {deletedTodo && (
           <div className="flex justify-center mt-4">
             <button onClick={handleUndo} className="bg-orange-500 text-white px-4 py-2 rounded">Undo delete (3s)</button>
           </div>
         )}
-
-        <div className="bg-gray-800 rounded">
-          <div className="w-[90%] mx-auto mt-4 bg-gray-300 dark:bg-gray-700 rounded-full h-4 overflow-hidden">
-            <div className={`${theme === "dark" ? "bg-pink-500" : "bg-gray-600"} h-4 transition-all duration-700 ease-in-out`}
-              style={{ width: `${todos.length === 0 ? 0 : (todos.filter(t => t.completed).length / todos.length) * 100}%` }}
-            ></div>
+              {deletedAllTodo && (
+          <div className="flex justify-center mt-4">
+            <button onClick={handleUndoDeleteAll} className="bg-orange-500 text-white px-4 py-2 rounded">Undo delete (5s)</button>
           </div>
-          <p className="text-center mt-2 font-medium px-2 text-white">
-            {todos.length === 0 ? "No tasks yet" : `${Math.round((todos.filter(t => t.completed).length / todos.length) * 100)}% completed`}
-          </p>
+        )}
         </div>
+       
       </div>
+    
     </section>
   )
-}
+  }
+
